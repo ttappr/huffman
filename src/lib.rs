@@ -19,15 +19,15 @@ impl Handle {
 
 
 struct Node {
-    byte    : Option<u8>,
+    char_   : Option<char>,
     freq    : usize,
     left    : Handle,
     right   : Handle,
 }
 
 impl Node {
-    fn new(byte: Option<u8>, freq: usize) -> Self {
-        Self { byte, freq, left: HNONE, right: HNONE }
+    fn new(char_: Option<char>, freq: usize) -> Self {
+        Self { char_, freq, left: HNONE, right: HNONE }
     }
 }
 
@@ -47,8 +47,8 @@ impl NodeMem {
     fn len(&self) -> usize {
         self.nodes.len()
     }
-    fn new_node(&mut self, byte: Option<u8>, freq: usize) -> Handle {
-        self.nodes.push(Node::new(byte, freq));
+    fn new_node(&mut self, char_: Option<char>, freq: usize) -> Handle {
+        self.nodes.push(Node::new(char_, freq));
         Handle(self.nodes.len() as u16 - 1)
     }
     fn h2node(&self, handle: Handle) -> &Node {
@@ -64,7 +64,7 @@ fn create_freq_nodes(data: &str) -> NodeMem {
     let mut freqs = HashMap::new();
     let mut nodes = NodeMem::new();
 
-    for b in data.bytes() {
+    for b in data.chars() {
         *freqs.entry(b).or_insert(0) += 1;
     }
     for (c, f) in freqs {
@@ -107,12 +107,12 @@ fn build_huffman_tree(nodes: &mut NodeMem) -> Handle {
 
 fn generate_huffman_code(node  : Handle, 
                          code  : &mut String,
-                         huff  : &mut HashMap<u8, String>,
+                         huff  : &mut HashMap<char, String>,
                          nodes : &NodeMem) 
 {
     if node != HNONE {
-        if let Some(b) = nodes.h2node(node).byte {
-            huff.insert(b, code.clone());
+        if let Some(c) = nodes.h2node(node).char_ {
+            huff.insert(c, code.clone());
         }
         code.push('0');
         generate_huffman_code(nodes.h2node(node).left, code, huff, nodes);
@@ -124,7 +124,7 @@ fn generate_huffman_code(node  : Handle,
     }
 }
 
-pub fn huffman_encoding(data: &str) -> HashMap<u8, String> {
+pub fn huffman_encoding(data: &str) -> HashMap<char, String> {
     let mut nodes = create_freq_nodes(data);
     let     tree  = build_huffman_tree(&mut nodes);
 
@@ -133,7 +133,6 @@ pub fn huffman_encoding(data: &str) -> HashMap<u8, String> {
 
     generate_huffman_code(tree, &mut code, &mut huff, &nodes);
 
-    //huff.into_iter().map(|(k, v)| (k as char, v)).collect()
     huff
 }
 
@@ -148,14 +147,12 @@ mod tests {
         let text = read_to_string("data/moby_dick.txt").unwrap();
         let huff = huffman_encoding(&text);
 
-        let huff_chars = huff.iter().map(|(&b, f)| (b as char, f))
-                                    .collect::<Vec<_>>();
-        println!("\nHUFFMAN CODE: {:?}\n", huff_chars);
+        println!("\nHUFFMAN CODE: {:?}\n", huff);
 
         let mut freq = HashMap::new();
         let mut compressed_size = 0;
 
-        for ch in text.bytes() {
+        for ch in text.chars() {
             *freq.entry(ch).or_insert(0) += 1;
         }
 
