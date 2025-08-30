@@ -55,18 +55,6 @@ impl Node {
             Node::Branch { freq, .. } => *freq,
         }
     }
-    fn left(&self) -> Handle {
-        match self {
-            Node::Leaf   {       .. } => HNONE,
-            Node::Branch { left, .. } => *left,
-        }
-    }
-    fn right(&self) -> Handle {
-        match self {
-            Node::Leaf   {        .. } => HNONE,
-            Node::Branch { right, .. } => *right,
-        }
-    }
 }
 
 
@@ -163,17 +151,21 @@ fn generate_huffman_codes(node  : Handle,
                           huff  : &mut HashMap<char, String>,
                           nodes : &NodeMem) 
 {
-    if node != HNONE {
-        if let Node::Leaf { char_, .. } = nodes.h2node(node) {
-            huff.insert(*char_, code.clone());
-        }
-        code.push('0');
-        generate_huffman_codes(nodes.h2node(node).left(), code, huff, nodes);
-        code.pop();
+    if node != HNONE { 
+        match nodes.h2node(node) {
+            Node::Leaf { char_, .. } => {
+                huff.insert(*char_, code.clone());
+            },
+            Node::Branch { left, right, .. } => {
+                code.push('0');
+                generate_huffman_codes(*left, code, huff, nodes);
+                code.pop();
 
-        code.push('1');
-        generate_huffman_codes(nodes.h2node(node).right(), code, huff, nodes);
-        code.pop();
+                code.push('1');
+                generate_huffman_codes(*right, code, huff, nodes);
+                code.pop();
+            }
+        }
     }
 }
 
