@@ -1,9 +1,26 @@
+//! An implementation of a Huffman encoder that produces strings representing 
+//! the binary Huffman codes assigned to characters based on their frequency
+//! in the provided text. This isn't a practical compression library; it's a 
+//! demonstration of how Huffman codes can be calculated.
+//! 
+//! Actual compression of text would take two passes. One pass is needed to get
+//! the character frquencies, and another pass to convert characters to Huffman
+//! codes.
+//! 
+//! How decompression could be imlemented isn't addressed by the code. A state
+//! machine may be the most efficient way to convert a stream of binary values
+//! back to characters.
+//! 
+
 use std::collections::HashMap;
 use std::cmp::Ordering;
 
 pub use heapq::*;
 
 
+/// A handle to a `Node`. It holds an index in to the vector that holds the 
+/// nodes.
+/// 
 #[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]
 struct Handle(u16);
@@ -17,23 +34,45 @@ impl Handle {
 }
 
 
-struct Node {
-    char_   : Option<char>,
-    freq    : usize,
-    left    : Handle,
-    right   : Handle,
+/// Represents the nodes of the Huffman tree used to generate the codes for
+/// characters.
+/// 
+enum Node {
+    Leaf   { char_: char, freq: usize },
+    Branch { freq: usize, left: Handle, right: Handle }
 }
 
 impl Node {
-    fn new(char_: Option<char>, freq: usize, left: Handle, right: Handle) 
-
-        -> Self 
-    {
-        Self { char_, freq, left, right }
+    fn new_leaf(char_: char, freq: usize) -> Self {
+        Node::Leaf{ char_, freq }
+    }
+    fn new_branch(freq: usize, left: Handle, right: Handle) -> Self {
+        Node::Branch { freq, left, right }
+    }
+    fn freq(&self) -> usize {
+        match self {
+            Node::Leaf   { freq, .. } |
+            Node::Branch { freq, .. } => *freq,
+        }
+    }
+    fn left(&self) -> Handle {
+        match self {
+            Node::Leaf   {       .. } => HNONE,
+            Node::Branch { left, .. } => *left,
+        }
+    }
+    fn right(&self) -> Handle {
+        match self {
+            Node::Leaf   {        .. } => HNONE,
+            Node::Branch { right, .. } => *right,
+        }
     }
 }
 
 
+/// Holds all the nodes of the Huffman tree in continguous memory. This is a
+/// cache efficent way to process them.
+/// 
 struct NodeMem {
     nodes: Vec<Node>,
 }
@@ -45,15 +84,15 @@ impl NodeMem {
     fn len(&self) -> usize {
         self.nodes.len()
     }
-    fn new_node(&mut self, 
-                char_ : Option<char>, 
-                freq  : usize, 
-                left  : Handle, 
-                right : Handle) 
+    fn new_leaf(&mut self, char_: char, freq: usize) -> Handle {
+        self.nodes.push(Node::new_leaf(char_, freq));
+        Handle(self.nodes.len() as u16 - 1)
+    }
+    fn new_branch(&mut self, freq: usize, left: Handle, right: Handle) 
 
         -> Handle 
     {
-        self.nodes.push(Node::new(char_, freq, left, right));
+        self.nodes.push(Node::new_branch(freq, left, right));
         Handle(self.nodes.len() as u16 - 1)
     }
     fn h2node(&self, handle: Handle) -> &Node {
@@ -66,6 +105,8 @@ impl NodeMem {
 }
 
 
+/// Create the initial leaf nodes that have the frequencies of each character.
+/// 
 fn create_freq_nodes(data: &str) -> NodeMem {
     let mut freqs = HashMap::new();
     let mut nodes = NodeMem::new();
@@ -74,18 +115,20 @@ fn create_freq_nodes(data: &str) -> NodeMem {
         *freqs.entry(b).or_insert(0) += 1;
     }
     for (c, f) in freqs {
-        nodes.new_node(Some(c), f, HNONE, HNONE);
+        nodes.new_leaf(c, f);
     }
     nodes
 }
 
+/// Constructs the tree used to produce Huffman codes.
+/// 
 fn build_huffman_tree(nodes: &mut NodeMem) -> Handle {
     // `heap` holds instances of `Handle`, which are basically just indexes into
     // `nodes`.
     let mut heap = (0..nodes.len() as u16).map(Handle).collect::<Vec<_>>();
 
     fn cmp(a: &Handle, b: &Handle, nodes: &NodeMem) -> Ordering {
-        nodes.h2node(*a).freq.cmp(&nodes.h2node(*b).freq)
+        nodes.h2node(*a).freq().cmp(&nodes.h2node(*b).freq())
     }
 
     heapify_with_aux(&mut heap, cmp, nodes);
@@ -95,8 +138,9 @@ fn build_huffman_tree(nodes: &mut NodeMem) -> Handle {
                heap_pop_with_aux(&mut heap, cmp, nodes)) {
 
             (Some(left), Some(right)) => {
-                let freq = nodes.h2node(left).freq + nodes.h2node(right).freq;
-                let merged = nodes.new_node(None, freq, left, right);
+                let freq = nodes.h2node(left).freq() 
+                            + nodes.h2node(right).freq();
+                let merged = nodes.new_branch(freq, left, right);
 
                 heap_push_with_aux(&mut heap, merged, cmp, nodes);    
             },
@@ -110,33 +154,40 @@ fn build_huffman_tree(nodes: &mut NodeMem) -> Handle {
     }
 }
 
-fn generate_huffman_code(node  : Handle, 
-                         code  : &mut String,
-                         huff  : &mut HashMap<char, String>,
-                         nodes : &NodeMem) 
+/// Generates human-readable binary strings representing Huffman codes. The
+/// dictionary passed to `huff` will be updated with these codes. The dictionary
+/// can then be printed and examined.
+/// 
+fn generate_huffman_codes(node  : Handle, 
+                          code  : &mut String,
+                          huff  : &mut HashMap<char, String>,
+                          nodes : &NodeMem) 
 {
     if node != HNONE {
-        if let Some(c) = nodes.h2node(node).char_ {
-            huff.insert(c, code.clone());
+        if let Node::Leaf { char_, .. } = nodes.h2node(node) {
+            huff.insert(*char_, code.clone());
         }
         code.push('0');
-        generate_huffman_code(nodes.h2node(node).left, code, huff, nodes);
+        generate_huffman_codes(nodes.h2node(node).left(), code, huff, nodes);
         code.pop();
 
         code.push('1');
-        generate_huffman_code(nodes.h2node(node).right, code, huff, nodes);
+        generate_huffman_codes(nodes.h2node(node).right(), code, huff, nodes);
         code.pop();
     }
 }
 
-pub fn huffman_encoding(data: &str) -> HashMap<char, String> {
+/// Generates a mapping of characters to string representations of their Huffman
+/// codes.
+/// 
+pub fn huffman_encode(data: &str) -> HashMap<char, String> {
     let mut nodes = create_freq_nodes(data);
     let     tree  = build_huffman_tree(&mut nodes);
 
     let mut huff = HashMap::new();
     let mut code = String::new();
 
-    generate_huffman_code(tree, &mut code, &mut huff, &nodes);
+    generate_huffman_codes(tree, &mut code, &mut huff, &nodes);
 
     huff
 }
@@ -150,7 +201,7 @@ mod tests {
     #[test]
     fn melville() {
         let text = read_to_string("data/moby_dick.txt").unwrap();
-        let huff = huffman_encoding(&text);
+        let huff = huffman_encode(&text);
 
         println!("\nHUFFMAN CODE: {:?}\n", huff);
 
