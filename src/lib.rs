@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::cmp::Ordering;
 
-mod heapq;
-use heapq::*;
+pub use heapq::*;
 
 
 #[derive(Clone, Copy, PartialEq)]
@@ -26,8 +25,11 @@ struct Node {
 }
 
 impl Node {
-    fn new(char_: Option<char>, freq: usize) -> Self {
-        Self { char_, freq, left: HNONE, right: HNONE }
+    fn new(char_: Option<char>, freq: usize, left: Handle, right: Handle) 
+
+        -> Self 
+    {
+        Self { char_, freq, left, right }
     }
 }
 
@@ -40,20 +42,24 @@ impl NodeMem {
     fn new() -> Self {
         Self { nodes: Vec::new() }
     }
-    #[allow(dead_code)]
-    fn with_capacity(size: usize) -> Self {
-        Self { nodes: Vec::with_capacity(size) }
-    }
     fn len(&self) -> usize {
         self.nodes.len()
     }
-    fn new_node(&mut self, char_: Option<char>, freq: usize) -> Handle {
-        self.nodes.push(Node::new(char_, freq));
+    fn new_node(&mut self, 
+                char_ : Option<char>, 
+                freq  : usize, 
+                left  : Handle, 
+                right : Handle) 
+
+        -> Handle 
+    {
+        self.nodes.push(Node::new(char_, freq, left, right));
         Handle(self.nodes.len() as u16 - 1)
     }
     fn h2node(&self, handle: Handle) -> &Node {
         &self.nodes[handle.idx()]
     }
+    #[allow(dead_code)]
     fn h2node_mut(&mut self, handle: Handle) -> &mut Node {
         &mut self.nodes[handle.idx()]
     }
@@ -68,32 +74,31 @@ fn create_freq_nodes(data: &str) -> NodeMem {
         *freqs.entry(b).or_insert(0) += 1;
     }
     for (c, f) in freqs {
-        nodes.new_node(Some(c), f);
+        nodes.new_node(Some(c), f, HNONE, HNONE);
     }
     nodes
 }
 
 fn build_huffman_tree(nodes: &mut NodeMem) -> Handle {
+    // `heap` holds instances of `Handle`, which are basically just indexes into
+    // `nodes`.
     let mut heap = (0..nodes.len() as u16).map(Handle).collect::<Vec<_>>();
 
     fn cmp(a: &Handle, b: &Handle, nodes: &NodeMem) -> Ordering {
         nodes.h2node(*a).freq.cmp(&nodes.h2node(*b).freq)
     }
 
-    heapify(&mut heap, &cmp, nodes);
+    heapify_with_aux(&mut heap, cmp, nodes);
 
     loop {
-        match (heap_pop(&mut heap, &cmp, nodes), 
-               heap_pop(&mut heap, &cmp, nodes)) {
+        match (heap_pop_with_aux(&mut heap, cmp, nodes), 
+               heap_pop_with_aux(&mut heap, cmp, nodes)) {
 
             (Some(left), Some(right)) => {
                 let freq = nodes.h2node(left).freq + nodes.h2node(right).freq;
-                let merged = nodes.new_node(None, freq);
+                let merged = nodes.new_node(None, freq, left, right);
 
-                nodes.h2node_mut(merged).left = left;
-                nodes.h2node_mut(merged).right = right;
-
-                heap_push(&mut heap, merged, &cmp, nodes);    
+                heap_push_with_aux(&mut heap, merged, cmp, nodes);    
             },
             (Some(left), None) => {
                 return left;

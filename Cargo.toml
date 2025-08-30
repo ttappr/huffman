@@ -4,3 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+heapq = { git="https://github.com/ttappr/heapq.git" }
