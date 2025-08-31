@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::cmp::Ordering;
 
-pub use heapq::*;
+use heapq::{heapify_with_aux, heap_pop_with_aux, heap_push_with_aux};
 
 
 /// A handle to a `Node`. It holds an index in to the vector that holds the 
