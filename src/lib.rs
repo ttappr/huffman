@@ -146,10 +146,10 @@ fn build_huffman_tree(nodes: &mut NodeMem) -> Handle {
 /// dictionary passed to `huff` will be updated with these codes. The dictionary
 /// can then be printed and examined.
 /// 
-fn generate_huffman_codes(node  : Handle, 
-                          code  : &mut String,
-                          huff  : &mut HashMap<char, String>,
-                          nodes : &NodeMem) 
+fn generate_huffman_codes_recurs(node  : Handle, 
+                                 code  : &mut String,
+                                 huff  : &mut HashMap<char, String>,
+                                 nodes : &NodeMem) 
 {
     if node != HNONE { 
         match nodes.h2node(node) {
@@ -158,11 +158,11 @@ fn generate_huffman_codes(node  : Handle,
             },
             Node::Branch { left, right, .. } => {
                 code.push('0');
-                generate_huffman_codes(*left, code, huff, nodes);
+                generate_huffman_codes_recurs(*left, code, huff, nodes);
                 code.pop();
 
                 code.push('1');
-                generate_huffman_codes(*right, code, huff, nodes);
+                generate_huffman_codes_recurs(*right, code, huff, nodes);
                 code.pop();
             }
         }
@@ -172,14 +172,14 @@ fn generate_huffman_codes(node  : Handle,
 /// Generates a mapping of characters to string representations of their Huffman
 /// codes.
 /// 
-pub fn huffman_encode(data: &str) -> HashMap<char, String> {
+pub fn generate_huffman_codes(data: &str) -> HashMap<char, String> {
     let mut nodes = create_freq_nodes(data);
     let     tree  = build_huffman_tree(&mut nodes);
 
     let mut huff = HashMap::new();
     let mut code = String::new();
 
-    generate_huffman_codes(tree, &mut code, &mut huff, &nodes);
+    generate_huffman_codes_recurs(tree, &mut code, &mut huff, &nodes);
 
     huff
 }
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn melville() {
         let text = read_to_string("data/moby_dick.txt").unwrap();
-        let huff = huffman_encode(&text);
+        let huff = generate_huffman_codes(&text);
 
         println!("\nHUFFMAN CODE: {:?}\n", huff);
 
